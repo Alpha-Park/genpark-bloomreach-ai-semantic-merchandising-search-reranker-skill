@@ -3,6 +3,20 @@ import json
 import sys
 from client import BloomreachAISemanticMerchandisingReranker
 
+from typing import Any, Dict, List, Optional
+
+try:
+    from mcp.server.fastmcp import FastMCP
+except ImportError as exc:
+    raise SystemExit("MCP requires the mcp package. Run: python -m pip install -r requirements.txt") from exc
+
+mcp = FastMCP('genpark-bloomreach-ai-semantic-merchandising-search-reranker-skill')
+
+@mcp.tool()
+def rerank_catalog(query: str = "", catalog_items: Optional[List[Dict[str, Any]]] = None, merchandising_rules: Optional[Dict[str, Any]] = None) -> str:
+    """Rerank supplied catalog items using semantic and merchandising signals."""
+    return json.dumps(BloomreachAISemanticMerchandisingReranker().rerank_catalog(query, catalog_items if catalog_items is not None else [], merchandising_rules if merchandising_rules is not None else {}))
+
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--test":
         reranker = BloomreachAISemanticMerchandisingReranker()
@@ -17,28 +31,7 @@ def main():
         print(f"[TEST PASS] Bloomreach Reranker Passed! Top Pick: {res['top_products'][0]['title']}")
         sys.exit(0)
 
-    for line in sys.stdin:
-        if not line.strip():
-            continue
-        try:
-            req = json.loads(line)
-            method = req.get("method")
-            msg_id = req.get("id")
-            if method == "initialize":
-                print(json.dumps({"jsonrpc": "2.0", "id": msg_id, "result": {"serverInfo": {"name": "genpark-bloomreach-reranker", "version": "1.0.0"}}}))
-            elif method == "tools/list":
-                print(json.dumps({"jsonrpc": "2.0", "id": msg_id, "result": {"tools": [{"name": "rerank_catalog", "description": "Bloomreach semantic e-commerce search and merchandising reranker"}]}}))
-            elif method == "tools/call":
-                args = req.get("params", {}).get("arguments", {})
-                reranker = BloomreachAISemanticMerchandisingReranker()
-                out = reranker.rerank_catalog(args.get("query", ""), args.get("catalog_items", []), args.get("merchandising_rules", {}))
-                print(json.dumps({"jsonrpc": "2.0", "id": msg_id, "result": {"content": [{"type": "text", "text": json.dumps(out)}]}}))
-            else:
-                print(json.dumps({"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32601, "message": "Method not found"}}))
-            sys.stdout.flush()
-        except Exception as e:
-            print(json.dumps({"jsonrpc": "2.0", "error": {"code": -32603, "message": str(e)}}))
-            sys.stdout.flush()
+    mcp.run(transport="stdio")
 
 if __name__ == "__main__":
     main()
